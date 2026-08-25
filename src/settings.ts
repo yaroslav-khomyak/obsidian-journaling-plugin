@@ -50,12 +50,12 @@ export class JournalingSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Include Paths")
             .setDesc(
-                "The daily notes located in these paths will be accessible via the journaling view.",
+                "The daily notes located in these paths will be accessible via the journaling view. Use \"/\" to scan the whole vault from its root.",
             )
             .addTextArea((text) =>
                 text
                     .setPlaceholder(
-                        "Folder paths separated by commas, e.g.: path1/path2, path3, path4",
+                        "Folder paths separated by commas, e.g.: path1/path2, path3, path4 (or \"/\" for the vault root)",
                     )
                     .setValue(this.plugin.settings.paths)
                     .onChange(async (value) => {
