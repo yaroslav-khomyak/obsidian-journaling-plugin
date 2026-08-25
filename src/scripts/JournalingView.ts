@@ -4,6 +4,14 @@ import type JournalingPlugin from "../main";
 
 let intervalId: number;
 
+// Helper function: Normalize a configured path to a vault-relative folder path.
+// The vault root can be written as "/", "\", "." or "./" and normalizes to "".
+function normalizeSourcePath(path: string): string {
+    const trimmed = path.trim().replace(/\\/g, "/");
+    const withoutSlashes = trimmed.replace(/^\/+|\/+$/g, "");
+    return withoutSlashes === "." ? "" : withoutSlashes;
+}
+
 // Scan the directories for changes and update the journaling files accordingly
 async function scanDirectories(
     vault: Vault,
@@ -13,7 +21,9 @@ async function scanDirectories(
     filterValue: string,
 ) {
     for (const path of paths) {
-        const journalingFilePath: string = `${path}/${fileName}`.trim();
+        const journalingFilePath: string = path
+            ? `${path}/${fileName}`
+            : fileName;
         const targetFile: TAbstractFile | null =
             vault.getAbstractFileByPath(journalingFilePath);
 
@@ -72,15 +82,17 @@ async function createJournaling(vault: Vault, filePath: string) {
 }
 
 // Helper function: Get all daily note paths based on the date format (YYYY-MM-DD)
+// An empty path means the vault root, so every markdown file is a candidate.
 async function getPathsByDate(
     vault: Vault,
     path: string,
     dateFormat: string,
 ): Promise<TFile[]> {
+    const prefix = path ? `${path}/` : "";
     const files = vault.getMarkdownFiles().filter((file) => {
         const fileNameWithoutExt = file.name.replace(".md", "");
         const parsedDate = moment.utc(fileNameWithoutExt, dateFormat, true);
-        return file.path.startsWith(path.trim()) && parsedDate.isValid();
+        return file.path.startsWith(prefix) && parsedDate.isValid();
     });
     return files;
 }
@@ -107,14 +119,23 @@ export default async function journalingView(
     app: App,
     plugin: JournalingPlugin,
 ) {
-    let paths: string | string[] = plugin.settings.paths.trim();
+    const rawPaths: string = plugin.settings.paths.trim();
     const dateFormat: string = plugin.settings.dateFormat.trim();
     const fileName: string = plugin.settings.fileName.trim();
     const filterValue: string = plugin.settings.filterValue;
     const updateInterval: number = plugin.settings.updateInterval * 1000;
 
-    if (paths.length > 0 && fileName.length > 0 && updateInterval >= 1000) {
-        paths = plugin.settings.paths.split(",");
+    if (rawPaths.length > 0 && fileName.length > 0 && updateInterval >= 1000) {
+        // Drop empty segments ("a,,b") before normalizing, so that only an
+        // explicit "/" (or ".") resolves to the vault root.
+        const paths: string[] = [
+            ...new Set(
+                rawPaths
+                    .split(",")
+                    .filter((segment) => segment.trim().length > 0)
+                    .map(normalizeSourcePath),
+            ),
+        ];
         const vault: Vault = app.vault;
 
         // Start the monitoring process and return the new interval ID
